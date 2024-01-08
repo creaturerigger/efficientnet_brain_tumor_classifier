@@ -1,5 +1,6 @@
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data.distributed import DistributedSampler
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.utils.data import DataLoader
@@ -45,6 +46,7 @@ efficient_net_options = {
 
 def eval(rank, world_size):
     dist.init_process_group(backend="gloo", rank=rank, world_size=world_size)
+    print("started")
     utils = Utils()
     torch.cuda.set_device(rank)
     if not os.path.isdir('artifacts'):
@@ -65,17 +67,19 @@ def eval(rank, world_size):
                                      transform=transforms,
                                      target_transform=None, 
                                      split='test')
-    
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, 
+    test_sampler = DistributedSampler(test_dataset)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size,
+                             sampler=test_sampler, 
                              shuffle=False)
-    
-    model_dict = torch.load(checkpoint, map_location=torch.device(rank))
+    dist.barrier()
+    map_location = {'cuda:%d' % 0: 'cuda:%d' % rank}
+    model_dict = torch.load(checkpoint, map_location=map_location)
     test_model = EfficientNet()
     test_model.load_state_dict(model_dict)
 
     test_model.to(rank)
-    test_model = DDP(test_model, device_ids=[rank])
-    test_model.eval()
+    ddp_model = DDP(test_model, device_ids=[rank])
+    ddp_model.eval()
 
     wrong_images = []
     wrong_predictions = []
@@ -87,8 +91,8 @@ def eval(rank, world_size):
         scores = []
         for image_batch, labels in tqdm(test_loader):
             image_batch = image_batch.float().to(rank)
-
-            output = test_model(image_batch)
+            labels = labels.to(rank)
+            output = ddp_model(image_batch)
             _, predicted_labels = torch.max(output, dim=1)
             predictions.extend(predicted_labels.cpu().numpy())
             scores.extend(output.cpu().numpy())
@@ -107,6 +111,8 @@ def eval(rank, world_size):
     test_acc = np.mean(correct_preds) * 100.0
     print("Model's accuracy on test set is %.3f"%test_acc)
 
+    cleanup()
+
 
 
 def main():
@@ -115,11 +121,15 @@ def main():
         args=(world_size,),
         nprocs=world_size,
         join=True)
+    
+
+def cleanup():
+    dist.destroy_process_group()
 
 
 if __name__ == "__main__":
     os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = "29500"
+    os.environ["MASTER_PORT"] = "4718"
     main()
 
 
