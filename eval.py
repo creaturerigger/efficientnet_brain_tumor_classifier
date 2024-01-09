@@ -46,6 +46,16 @@ efficient_net_options = {
 }
 
 
+def get_confusion_matrix(y_pred, y_true):
+    num_classes = len(np.unique(y_true))
+    conf_mat = torch.zeros((num_classes, num_classes))
+    for i in range(len(y_true)):      
+        true_class_idx = y_true[i]
+        idx = y_pred[i]
+        conf_mat[true_class_idx, idx] += 1
+    return conf_mat
+
+
 def eval(rank, world_size):
     dist.init_process_group(backend="gloo", rank=rank, world_size=world_size)
     
@@ -69,14 +79,12 @@ def eval(rank, world_size):
                                      transform=transforms,
                                      target_transform=None, 
                                      split='test')
-    test_sampler = DistributedSampler(test_dataset)
+    
     test_loader = DataLoader(test_dataset, batch_size=batch_size,
-                             sampler=test_sampler, 
                              shuffle=False)
-    dist.barrier()
-    map_location = {'cuda:%d' % 0: 'cuda:%d' % rank}
-    model_dict = torch.load(checkpoint, map_location=map_location)
-    test_model = EfficientNet(w=width_coef, d=depth_coef, 
+    
+    model_dict = torch.load(checkpoint, map_location=torch.device(rank))
+    test_model = EfficientNet(w=width_coef, d=depth_coef,
                               num_classes=num_classes)
     test_model.load_state_dict(model_dict)
     
@@ -87,11 +95,12 @@ def eval(rank, world_size):
     wrong_images = []
     wrong_predictions = []
     correct_labels = []
-
+    predictions = []
+    targets = []
+    scores = []
+    
     with torch.no_grad():
-        predictions = []
-        targets = []
-        scores = []
+        
         for image_batch, labels in tqdm(test_loader):
             image_batch = image_batch.float().to(rank)
             labels = labels.to(rank)
@@ -105,14 +114,16 @@ def eval(rank, world_size):
                     wrong_images.append(image_batch[i].cpu().numpy())
                     wrong_predictions.append(predicted_labels[i])
                     correct_labels.append(labels[i])
-
-    wrongs_dict = OrderedDict([('wrong_images', wrong_images),
+    conf_mat = get_confusion_matrix(predictions, test_dataset.labels)
+    eval_dict = OrderedDict([('wrong_images', wrong_images),
                                ('wrong_predictions', wrong_predictions),
-                               ('correct_labels', correct_labels)])
-    torch.save(wrongs_dict, 'artifacts/wrongs_dict.pth')
-    correct_preds = np.equal(targets, predictions)
+                               ('correct_labels', correct_labels),
+                               ('confusion_matrix', conf_mat)])
+    # dist.barrier()
+    torch.save(eval_dict, 'artifacts/eval_dict.pth')
+    correct_preds = np.equal(test_dataset.labels, predictions)
     test_acc = np.mean(correct_preds) * 100.0
-    print("Model's accuracy on test set is %.3f"%test_acc) 
+    print("Model's accuracy on test set is %.3f"%test_acc)
 
 
 def main():
@@ -121,24 +132,9 @@ def main():
         args=(world_size,),
         nprocs=world_size,
         join=True)
-    
-
-def cleanup():
-    try:
-        if dist.get_rank() != -1:
-            dist.destroy_process_group()
-        else:
-            print("Process group has already been destroyed.")
-    except RuntimeError as e:
-        print("Either process group is already destroyed or not initialized: ", e)
 
 
 if __name__ == "__main__":
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "4718"
-    try:
-        main()
-    except:
-        print("An error ocurred please check your setup.")
-    finally:
-        cleanup()
+    main()

@@ -38,6 +38,9 @@ parser.add_argument("-ci", "--checkpoint-save-interval", type=int, default=5,
                         of specified objects will be saved after every n epochs")
 parser.add_argument("-r", "--resolution", type=int,
                     help="Resolution of the image. (In case you may need to specify)")
+parser.add_argument("-nc", "--number-of-classes", type=int,
+                    help="Number of out classes.", default=4,
+                    required=True)
     
 args = parser.parse_args()
 
@@ -62,8 +65,9 @@ model_version = args.model_version
 width_mult, depth_mult, res, dropout_rate = efficient_net_options[model_version]
 
 res = res if args.resolution == None else args.resolution
-
-model = EfficientNet(w=width_mult, d=depth_mult, dropout=0.0)
+num_classes = args.number_of_classes
+model = EfficientNet(w=width_mult, d=depth_mult, 
+                     dropout=0.0, num_classes=num_classes)
 
 NUM_OF_EPOCHS = args.epochs
 LR = float(args.learning_rate)
@@ -185,7 +189,7 @@ def train(rank, world_size):
     print(f"[Info] total training time {completion_time - start_time}")
     
     utils.plot_history(history=history, artifact_path="artifacts/", 
-                       file_name="history.png")  
+                       file_name="history.png")
 
     utils.save_history(history=history, artifact_path="artifacts/", 
                        file_name="train_history.pth")
