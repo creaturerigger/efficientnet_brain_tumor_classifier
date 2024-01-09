@@ -36,6 +36,8 @@ parser.add_argument("-dp", "--dataset-path", type=str, help="Dataset path \
 parser.add_argument("-ci", "--checkpoint-save-interval", type=int, default=5,
                     help="Checkpoint saving interval. State dictionaries \
                         of specified objects will be saved after every n epochs")
+parser.add_argument("-r", "--resolution", type=int,
+                    help="Resolution of the image. (In case you may need to specify)")
     
 args = parser.parse_args()
 
@@ -58,6 +60,8 @@ else:
 model_version = args.model_version
 
 width_mult, depth_mult, res, dropout_rate = efficient_net_options[model_version]
+
+res = res if args.resolution == None else args.resolution
 
 model = EfficientNet(w=width_mult, d=depth_mult, dropout=0.0)
 
@@ -86,8 +90,8 @@ def train(rank, world_size):
     loss_fn = nn.CrossEntropyLoss()
     scaler = torch.cuda.amp.grad_scaler.GradScaler(enabled=True)
     transforms = torch_transforms.Compose([
-        torch_transforms.Resize(224),
-        torch_transforms.CenterCrop(224),
+        torch_transforms.Resize(res),
+        torch_transforms.CenterCrop(res),
         torch_transforms.PILToTensor(),
     ])
 

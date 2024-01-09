@@ -29,6 +29,8 @@ parser.add_argument("-mp", "--model-path", type=str,
 parser.add_argument("-mv", "--model-version", type=str, default="b0",
                     help="Specifies the model's version",
                     choices=['b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7'])
+parser.add_argument("-nc", "--number-of-classes", type=int,
+                    help="Number of output classes.", required=True)
 
 args = parser.parse_args()
 
@@ -46,8 +48,7 @@ efficient_net_options = {
 
 def eval(rank, world_size):
     dist.init_process_group(backend="gloo", rank=rank, world_size=world_size)
-    print("started")
-    utils = Utils()
+    
     torch.cuda.set_device(rank)
     if not os.path.isdir('artifacts'):
         os.mkdir('artifacts')
@@ -56,7 +57,8 @@ def eval(rank, world_size):
     batch_size = args.test_batch_size
     checkpoint = args.model_path
     model_version = args.model_version
-    _, _, res, _ = efficient_net_options[model_version]
+    num_classes = args.number_of_classes
+    width_coef, depth_coef, res, _ = efficient_net_options[model_version]
     transforms = torch_transforms.Compose([
         torch_transforms.Resize(res),
         torch_transforms.CenterCrop(res),
@@ -74,9 +76,10 @@ def eval(rank, world_size):
     dist.barrier()
     map_location = {'cuda:%d' % 0: 'cuda:%d' % rank}
     model_dict = torch.load(checkpoint, map_location=map_location)
-    test_model = EfficientNet()
+    test_model = EfficientNet(w=width_coef, d=depth_coef, 
+                              num_classes=num_classes)
     test_model.load_state_dict(model_dict)
-
+    
     test_model.to(rank)
     ddp_model = DDP(test_model, device_ids=[rank])
     ddp_model.eval()
@@ -109,10 +112,7 @@ def eval(rank, world_size):
     torch.save(wrongs_dict, 'artifacts/wrongs_dict.pth')
     correct_preds = np.equal(targets, predictions)
     test_acc = np.mean(correct_preds) * 100.0
-    print("Model's accuracy on test set is %.3f"%test_acc)
-
-    cleanup()
-
+    print("Model's accuracy on test set is %.3f"%test_acc) 
 
 
 def main():
@@ -124,14 +124,21 @@ def main():
     
 
 def cleanup():
-    dist.destroy_process_group()
+    try:
+        if dist.get_rank() != -1:
+            dist.destroy_process_group()
+        else:
+            print("Process group has already been destroyed.")
+    except RuntimeError as e:
+        print("Either process group is already destroyed or not initialized: ", e)
 
 
 if __name__ == "__main__":
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "4718"
-    main()
-
-
-
-
+    try:
+        main()
+    except:
+        print("An error ocurred please check your setup.")
+    finally:
+        cleanup()
