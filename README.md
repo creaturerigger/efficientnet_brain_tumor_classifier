@@ -1,4 +1,4 @@
-# Reproducing AlexNet Paper
+# Brain Tumor MRI Images Classification with EfficientNet - B7
 
 This repository is the official implementation of Brain Tumor MRI Images Classification with EfficientNet - B7 as the final project of CMP5550 Computer Vision course. In this study the [Brain Tumor Dataset](https://www.kaggle.com/datasets/masoudnickparvar/brain-tumor-mri-dataset) dataset has been used.
 
@@ -10,7 +10,7 @@ In this project Python virtual environment has been utilized. To create a virtua
 python -m venv <path-to-virtualenv>
 ```
 
-After virtual environment is created to activate the virtual environment run the following code:
+After virtual environment is created, to activate the virtual environment run the following code:
 
 ```windows
 call <path-to-virtualenv>/Scripts/activate.bat
@@ -36,7 +36,7 @@ After activating the virtual environment your terminal should look like below:
 
 ## Requirements
 
-After activating the virtual environment to install the requirements run the following code:
+After activating the virtual environment, to install the requirements run the following code:
 
 ```setup
 pip install -r requirements.txt
@@ -78,14 +78,29 @@ To get more help and see the options run the following command:
 python eval.py --help
 ```
 
+Eval program saves an ordered dictionary storing the following outputs:
+
+* Misclassified images as numpy arrays
+* Predicted labels
+* Ground truth labels
+* Confusion matrix
+
 ## Results
 
 Our model achieves the following performance:
 
-| AlexNet            | Top-1 Accuracy  | Top-5 Accuracy |
-| ------------------ |---------------- | -------------- |
-| AlexNet            |     3.36%       |      14.34%    |
+| Model              | Accuracy        |
+| ------------------ |---------------- |
+| EfficientNet B7    |     95.728%     |
 
+
+## Notes
+
+Versions of the modules in the requirements.txt file may have dependencies or they may require a Python version newer than a specific version (>Python 3.9).
+
+## Important Note!
+
+While this study thoroughly examines the effectiveness of deep convolutional neural networks for medical images, its output solely serves research purposes and is not intended for medical decision-making.
 
 ## Contributing Guidelines
 
@@ -119,11 +134,11 @@ Thank you for your interest in contributing!
 For citation you can use the following BibTeX
 
 ```BibTeX
-@misc{alexnet_reproduction,
-  author = "Anwar Abuelrub, and Volkan Bakir",
-  title = "Reproducing AlexNet Paper: Final Project for ARI5004 Deep Learning Course",
+@misc{effnet_brain_tumor_classifier,
+  author = "Murat Samanci, and Volkan Bakir",
+  title = "Brain Tumor MRI Images Classification with EfficientNet - B7",
   year = "2024",
-  howpublished = "\url{https://github.com/creaturerigger/reproducing_alexnet_paper}",
-  note = "Implements the AlexNet model from the {ImageNet Classification with Deep Convolutional Neural Networks} paper on the ImageNet100 dataset. Includes training, evaluation, and performance analysis scripts."
+  howpublished = "\url{https://github.com/creaturerigger/efficientnet_brain_tumor_classifier}",
+  note = "Implements the EfficientNet model on brain tumor MRI images dataset. Includes training and evaluation scripts."
 }
 ```
